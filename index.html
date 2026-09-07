@@ -1,0 +1,1145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1c3f94">
+<meta name="color-scheme" content="light">
+<meta name="description" content="KOA Profiling Picture — take your 2x2 picture for Knights of the Altar Server, San Miguel Parish Panacan.">
+<title>Submit your 2×2 photo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+
+<!-- ===================================================================
+     EDIT THESE ONLY
+     1. ENDPOINT   – your Google Apps Script web app URL (see README)
+     2. FIELDS     – the information you want to collect
+     3. BG_COLOUR  – the replacement background colour
+     =================================================================== -->
+<script>
+const ENDPOINT  = "https://script.google.com/macros/s/AKfycbzcCJ5WePCRhTtZBDax4Cmbdo3n8LpCqcwGch4ZHiEBgW0vVKrGHvSpJOEZvqVRoSCRDA/exec";
+const BG_COLOUR = "#ffffff";
+
+// the photo file is named after this field, e.g. SENILLO.jpg
+const PHOTO_NAME_FIELD = "lastName";
+
+/* ---- Data privacy settings. Put real names and numbers here. ----
+   Under the Data Privacy Act (RA 10173) the group collecting this is the
+   "personal information controller" and must name itself, its Data
+   Protection Officer, the purpose, the retention period, and the member's
+   rights, at the moment consent is asked for. */
+const ORG        = "Knights of the Altar Server, San Miguel Parish Panacan";
+const DPO_NAME   = "the Parish Data Protection Officer";
+const DPO_CONTACT= "0947 175 3773";
+const RETENTION  = "for as long as you are an active member, and one year after you leave";
+const WHO_SEES   = "the KOA officers and the parish office";
+const CONSENT_VERSION = "2026-09-07";
+
+const FIELDS = [
+  { name: "lastName",  label: "Last name", type: "text", required: true,
+    placeholder: "SENILLO", upper: true,
+    help: "Example: SENILLO. Your picture will be saved as SENILLO.jpg" },
+
+  { name: "fullName",  label: "Full name", type: "text", required: true,
+    placeholder: "Bejay L. Senillo",
+    help: "Write it as: First name, Middle initial, Last name. Example: Bejay L. Senillo" },
+
+  { name: "birthdate", label: "Date of birth", type: "date", required: true,
+    min: "1930-01-01", max: "today" },
+
+  { name: "aspirant",  label: "Are you an aspirant?", type: "select", required: true,
+    options: ["Yes, I am an aspirant", "No, I am not an aspirant"] }
+];
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation@0.1.1675465747/selfie_segmentation.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_detection@0.4.1646425229/face_detection.js" crossorigin="anonymous"></script>
+
+<style>
+  :root{
+    --ink:#16203a;
+    --ink-soft:#5c6780;
+    --paper:#e9edf4;
+    --card:#ffffff;
+    --rule:#ccd4e2;
+    --seal:#1c3f94;
+    --seal-ink:#14306f;
+    --red:#c8102e;
+    --flag:#8a5312;
+    --bad:#a3271f;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:var(--paper);color:var(--ink);
+    font-family:"Public Sans", ui-sans-serif, system-ui, sans-serif;
+    font-size:16px;line-height:1.5;padding:24px 16px 64px;
+  }
+  main{max-width:560px;margin:0 auto}
+  button,input,select,textarea{font-family:inherit}
+  .btn{min-height:44px;-webkit-tap-highlight-color:transparent}
+  @media (max-width:430px){
+    body{padding:16px 12px 48px;padding-left:max(12px,env(safe-area-inset-left));padding-right:max(12px,env(safe-area-inset-right))}
+    .card{padding:16px}
+    h1{font-size:1.35rem}
+    .stage-controls .btn{flex:1 1 auto}
+    .stage-controls input[type=range]{flex:1 0 100%}
+    .example{flex-direction:column;align-items:center;text-align:center}
+    .example ul{text-align:left}
+  }
+  @media (max-width:430px) and (orientation:landscape){
+    .stage-wrap{width:min(220px,100%)}
+  }
+
+  h1{font-size:1.6rem;line-height:1.2;letter-spacing:-.015em;margin:0 0 6px}
+  .lede{color:var(--ink-soft);margin:0 0 20px;max-width:46ch}
+
+  .masthead{text-align:center;margin-bottom:18px}
+  .masthead .crest{width:104px;height:104px;object-fit:contain;display:block;margin:0 auto 10px;mix-blend-mode:multiply}
+  .masthead h1{margin:0}
+  .masthead h1::after{
+    content:"";display:block;width:44px;height:3px;margin:10px auto 0;
+    background:var(--red);
+  }
+  .masthead .org{margin:10px 0 0;color:var(--ink-soft);font-size:.9375rem;line-height:1.35}
+  .masthead + .lede{text-align:center;margin:16px auto 22px}
+
+  .colophon{
+    display:flex;gap:12px;align-items:center;justify-content:center;
+    margin-top:28px;color:var(--ink-soft);font-size:.8125rem;text-align:left;
+  }
+  .colophon img{width:46px;height:46px;object-fit:contain;mix-blend-mode:multiply}
+
+  .card{background:var(--card);border:1px solid var(--rule);border-radius:4px;padding:20px;margin-bottom:16px}
+  .card h2{font-size:1rem;font-weight:700;margin:0 0 4px}
+  .card p.hint{color:var(--ink-soft);font-size:.875rem;margin:0 0 16px}
+
+  .example{
+    display:flex;gap:14px;align-items:flex-start;
+    margin:0 0 18px;padding:12px;background:var(--paper);border-radius:3px;
+  }
+  .example img{width:88px;height:88px;flex:none;border:1px solid var(--rule);border-radius:2px;display:block}
+  .example b{display:block;font-size:.875rem;margin-bottom:4px}
+  .example ul{margin:0;padding-left:17px;font-size:.8125rem;color:var(--ink-soft);line-height:1.45}
+  .example li{margin-bottom:2px}
+
+  .stage-wrap{
+    position:relative;width:min(300px,100%,70vh);aspect-ratio:1;margin:0 auto;
+    background:var(--paper);border:1px solid var(--rule);overflow:hidden;touch-action:none;
+  }
+  .stage-wrap.empty{border-style:dashed;cursor:pointer}
+  .stage-wrap.busy canvas{opacity:.35}
+  @supports not (aspect-ratio: 1){
+    .stage-wrap{height:0;padding-bottom:100%}
+  }
+  canvas#stage{display:block;width:100%;height:100%}
+
+  .guides{position:absolute;inset:0;pointer-events:none}
+  .guides ellipse,.guides line{stroke:rgba(21,29,38,.3);fill:none;stroke-width:1;stroke-dasharray:4 4}
+  .empty-msg,.busy-msg{
+    position:absolute;inset:0;display:grid;place-content:center;text-align:center;
+    padding:0 24px;color:var(--ink-soft);font-size:.875rem;
+  }
+  .empty-msg strong{display:block;color:var(--ink);font-size:1rem;margin-bottom:2px}
+  .busy-msg{display:none;background:rgba(255,255,255,.7);font-weight:500;color:var(--ink)}
+  .stage-wrap.busy .busy-msg{display:grid}
+
+  video#cam{
+    position:absolute;inset:0;width:100%;height:100%;
+    object-fit:cover;display:none;background:#111;
+  }
+  .stage-wrap.live video#cam{display:block}
+  .stage-wrap.live canvas#stage{opacity:0}
+  .stage-wrap.live .guides ellipse,.stage-wrap.live .guides line{stroke:rgba(255,255,255,.8)}
+
+  .countdown{
+    position:absolute;inset:0;display:grid;place-content:center;
+    font-size:5rem;font-weight:700;color:#fff;text-shadow:0 2px 12px rgba(0,0,0,.5);
+    pointer-events:none;
+  }
+  .flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
+  .flash.on{opacity:.85;transition:opacity .35s ease-out}
+  .btn[aria-pressed="true"]{background:var(--seal);border-color:var(--seal);color:#fff}
+
+  .stage-controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:14px}
+  .stage-controls input[type=range]{min-width:120px}
+  .stage-wrap.drag{border-color:var(--seal);background:#dfe7f5}
+
+  .consent h3{font-size:.9375rem;margin:0 0 4px}
+  .notice{margin:0 0 14px;border:1px solid var(--rule);border-radius:3px;background:var(--paper)}
+  .notice summary{padding:10px 12px;cursor:pointer;font-size:.875rem;font-weight:500;min-height:44px;display:flex;align-items:center}
+  .notice > div{padding:0 12px 12px;font-size:.8125rem;line-height:1.5;color:var(--ink-soft)}
+  .notice h4{font-size:.8125rem;color:var(--ink);margin:14px 0 4px}
+  .notice ul{margin:0;padding-left:18px}
+  .notice li{margin-bottom:3px}
+  .consent{margin-top:18px;padding-top:16px;border-top:1px solid var(--rule)}
+  .consent .toggle{font-size:.875rem;line-height:1.45}
+  #guardianWrap{margin-top:12px;padding:12px;background:var(--paper);border-radius:3px}
+  #guardianWrap .field{margin-bottom:10px}
+  a.btn{display:inline-block;text-decoration:none;text-align:center}
+  #dataNote{margin:0 0 14px}
+
+  .check{margin-top:14px;padding:11px 13px;border-radius:3px;font-size:.875rem;border:1px solid}
+  .check.ok{background:#eaf3ec;border-color:#bcd9c4;color:#1d5a32}
+  .check.warn{background:#fdf3e3;border-color:#e7cfa4;color:#7a4d10}
+  .check b{display:block;margin-bottom:4px}
+  .check ul{margin:0;padding-left:18px;line-height:1.45}
+  .check li{margin-bottom:2px}
+  .btn-shoot{flex:1;background:var(--seal);border-color:var(--seal);color:#fff;font-weight:700}
+  .btn-shoot:hover{background:var(--seal-ink);border-color:var(--seal-ink)}
+  input[type=range]{flex:1;accent-color:var(--seal)}
+  .zoom-off{opacity:.4;pointer-events:none}
+
+  .toggles{margin-top:14px;padding-top:14px;border-top:1px solid var(--rule)}
+  .toggle{display:flex;gap:9px;align-items:flex-start;margin-bottom:10px;font-size:.9375rem}
+  .toggle:last-child{margin-bottom:0}
+  .toggle input{margin:4px 0 0;accent-color:var(--seal);flex:none}
+  .toggle span small{display:block;color:var(--ink-soft);font-size:.8125rem;line-height:1.4}
+  .toggle.off{opacity:.5}
+
+  .btn{font:inherit;font-weight:500;border-radius:3px;padding:9px 14px;cursor:pointer;
+       border:1px solid var(--rule);background:var(--card);color:var(--ink)}
+  .btn:hover{border-color:var(--ink-soft)}
+  .btn-primary{background:var(--seal);border-color:var(--seal);color:#fff;width:100%;padding:13px;font-weight:700}
+  .btn-primary:hover{background:var(--seal-ink);border-color:var(--seal-ink)}
+  .btn-primary[disabled]{background:var(--ink-soft);border-color:var(--ink-soft);cursor:progress}
+  .btn:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,.stage-wrap:focus-visible{
+    outline:2px solid var(--seal);outline-offset:2px}
+
+  .note{font-size:.8125rem;margin-top:12px;color:var(--ink-soft)}
+  .note.flag{color:var(--flag)}
+  .note.err{color:var(--bad);font-weight:500}
+
+  .field{margin-bottom:14px}
+  .field:last-of-type{margin-bottom:0}
+  label{display:block;font-size:.875rem;font-weight:500;margin-bottom:5px}
+  label .opt{font-weight:400;color:var(--ink-soft)}
+  input[type=text],input[type=email],input[type=tel],input[type=date],select,textarea{
+    width:100%;font:inherit;color:var(--ink);padding:10px 11px;
+    border:1px solid var(--rule);border-radius:3px;background:#fff}
+  textarea{min-height:76px;resize:vertical}
+  .help{margin:5px 0 0;font-size:.8125rem;color:var(--ink-soft);line-height:1.4}
+
+  #done{display:none;border-left:3px solid var(--seal)}
+  #done p{margin:0;color:var(--ink-soft)}
+  @media (prefers-reduced-motion:no-preference){
+    #done{animation:rise .25s ease-out}
+    @keyframes rise{from{opacity:0;transform:translateY(6px)}}
+  }
+</style>
+</head>
+<body>
+<main>
+  <header class="masthead">
+    <img src="koa-logo.jpg" alt="Knights of the Altar Server crest" class="crest">
+    <h1>KOA Profiling Picture</h1>
+    <p class="org">Knights of the Altar Server<br>San Miguel Parish Panacan</p>
+  </header>
+  <p class="lede">Take your 2×2 picture here. The background is replaced with white, the picture is cleaned up, and it is saved with your last name.</p>
+
+  <section class="card" id="photoCard">
+    <h2>Your photo</h2>
+    <p class="hint">Face the camera. Fit your head between the guides.</p>
+
+    <div class="example" id="example">
+      <img src="example.jpg" alt="A correctly framed 2×2 photo: shoulders and head centred, facing the camera, plain background."
+           onerror="document.getElementById('example').style.display='none'">
+      <div>
+        <b>Take yours like this</b>
+        <ul>
+          <li>Look straight at the camera, neutral face</li>
+          <li>Head and shoulders in the shot, head centred</li>
+          <li>Even light on the face, no shadow behind you</li>
+          <li>Plain wall behind you, nothing in the way</li>
+        </ul>
+      </div>
+    </div>
+
+    <p class="note" id="dataNote">First time on this page, it downloads about 5 MB for the background and face tools. Use Wi-Fi if you can.</p>
+
+    <div class="stage-wrap empty" id="stageWrap" tabindex="0" role="button" aria-label="Choose a photo">
+      <canvas id="stage"></canvas>
+      <video id="cam" playsinline muted></video>
+      <svg class="guides" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+        <ellipse cx="50" cy="45" rx="24" ry="31"></ellipse>
+        <line x1="8" y1="42" x2="18" y2="42"></line>
+        <line x1="82" y1="42" x2="92" y2="42"></line>
+      </svg>
+      <div class="empty-msg" id="emptyMsg">
+        <span><strong>Take your picture</strong>Tap here to open the camera, or upload a file</span>
+      </div>
+      <div class="busy-msg" id="busyMsg"><span>Cleaning up your photo…</span></div>
+      <div class="countdown" id="countdown" hidden></div>
+      <div class="flash" id="flash"></div>
+    </div>
+
+    <div class="stage-controls" id="stageControls">
+      <button type="button" class="btn btn-shoot" id="camBtn">Open the camera</button>
+      <button type="button" class="btn" id="pickBtn">Upload a file</button>
+      <button type="button" class="btn" id="frameBtn" hidden>Auto-frame</button>
+      <input type="range" id="zoom" min="1" max="3" step="0.01" value="1" aria-label="Zoom" class="zoom-off">
+    </div>
+    <input type="file" id="file" accept="image/*" hidden>
+    <div class="stage-controls" id="camControls" hidden>
+      <button type="button" class="btn btn-shoot" id="shootBtn">Take the shot</button>
+      <button type="button" class="btn" id="timerBtn" aria-pressed="false">3s timer</button>
+      <button type="button" class="btn" id="flipBtn" aria-label="Switch camera">Flip</button>
+      <button type="button" class="btn" id="cancelCamBtn">Cancel</button>
+    </div>
+
+    <div class="toggles">
+      <label class="toggle" id="bgToggle">
+        <input type="checkbox" id="bgOn" checked>
+        <span>White background<small>Cuts out everything behind you.</small></span>
+      </label>
+      <label class="toggle" id="enhToggle">
+        <input type="checkbox" id="enhOn" checked>
+        <span>Clean up the picture<small>Fixes dim lighting, colour cast, and softness.</small></span>
+      </label>
+    </div>
+
+    <div class="check" id="check" hidden></div>
+    <p class="note" id="photoNote">Nothing selected yet.</p>
+  </section>
+
+  <form class="card" id="form" novalidate>
+    <h2>Your information</h2>
+    <p class="hint">All boxes marked optional can be left blank.</p>
+    <div id="fields"></div>
+    <div class="consent">
+      <h3>Data privacy</h3>
+      <p class="hint" id="consentSummary"></p>
+
+      <details class="notice">
+        <summary>Read the full privacy notice</summary>
+        <div id="noticeBody"></div>
+      </details>
+
+      <label class="toggle">
+        <input type="checkbox" id="consent">
+        <span id="consentText"></span>
+      </label>
+
+      <label class="toggle">
+        <input type="checkbox" id="consentPublish">
+        <span>Optional: you may also use my picture in KOA announcements, tarpaulins, and social media posts. I can leave this unticked and still submit.</span>
+      </label>
+
+      <div id="guardianWrap" hidden>
+        <p class="hint" style="margin-bottom:10px">You are under 18, so your parent or guardian must agree for you.</p>
+        <div class="field">
+          <label for="guardianName">Parent or guardian's name</label>
+          <input type="text" id="guardianName" placeholder="Maria L. Senillo">
+        </div>
+        <div class="field">
+          <label for="guardianRel">Their relationship to you</label>
+          <input type="text" id="guardianRel" placeholder="Mother">
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="guardianOk">
+          <span>My parent or guardian has read this notice and agrees.</span>
+        </label>
+      </div>
+    </div>
+
+    <p class="note err" id="formErr" hidden></p>
+    <p style="margin:18px 0 0"><button type="submit" class="btn btn-primary" id="submitBtn">Send my photo and details</button></p>
+  </form>
+
+  <section class="card" id="done">
+    <h2>Sent</h2>
+    <p>Your picture and details were received. Keep a copy for yourself.</p>
+    <p style="margin:16px 0 0"><a class="btn btn-shoot" id="dlLink" download>Save my picture</a></p>
+  </section>
+  <footer class="colophon">
+    <img src="parish-logo.jpg" alt="San Miguel Parish Panacan seal">
+    <span>San Miguel Parish Panacan, established 1994<br>Amare et Servire</span>
+  </footer>
+</main>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ================= form ================= */
+  var fieldsEl = document.getElementById("fields");
+  FIELDS.forEach(function(f){
+    var wrap = document.createElement("div"); wrap.className = "field";
+    var id = "f_" + f.name;
+    var lbl = document.createElement("label");
+    lbl.setAttribute("for", id); lbl.textContent = f.label;
+    if (!f.required){
+      var o = document.createElement("span"); o.className = "opt"; o.textContent = " (optional)";
+      lbl.appendChild(o);
+    }
+    var input;
+    if (f.type === "textarea"){
+      input = document.createElement("textarea");
+    } else if (f.type === "select"){
+      input = document.createElement("select");
+      var blank = document.createElement("option");
+      blank.value = ""; blank.textContent = "Select one";
+      input.appendChild(blank);
+      (f.options || []).forEach(function(opt){
+        var oe = document.createElement("option");
+        oe.value = opt; oe.textContent = opt; input.appendChild(oe);
+      });
+    } else {
+      input = document.createElement("input"); input.type = f.type || "text";
+    }
+    input.id = id; input.name = f.name;
+    if (f.placeholder) input.placeholder = f.placeholder;
+    if (f.required) input.required = true;
+    if (f.min) input.min = f.min;
+    if (f.max) input.max = (f.max === "today") ? new Date().toISOString().slice(0, 10) : f.max;
+    if (f.upper){
+      input.style.textTransform = "uppercase";
+      input.autocapitalize = "characters";
+    }
+    wrap.appendChild(lbl); wrap.appendChild(input);
+    if (f.help){
+      var help = document.createElement("p");
+      help.className = "help";
+      help.textContent = f.help;
+      wrap.appendChild(help);
+    }
+    fieldsEl.appendChild(wrap);
+  });
+
+  /* ================= elements ================= */
+  var OUT = 600;          // 2in x 2in at 300 dpi
+  var MAXW = 1400;        // processing cap on the source image
+  var wrap = document.getElementById("stageWrap");
+  var cv   = document.getElementById("stage");
+  var ctx  = cv.getContext("2d");
+  var emptyMsg = document.getElementById("emptyMsg");
+  var busyMsg  = document.getElementById("busyMsg");
+  var zoomEl   = document.getElementById("zoom");
+  var note     = document.getElementById("photoNote");
+  var bgOn     = document.getElementById("bgOn");
+  var enhOn    = document.getElementById("enhOn");
+
+  var srcCanvas = null;   // original, capped
+  var maskCanvas = null;  // person alpha, same size as srcCanvas
+  var cache = {};         // rendered variants
+  var D = 300, base = 1, zoom = 1, ox = 0, oy = 0;
+
+  function newCanvas(w, h){
+    var c = document.createElement("canvas"); c.width = w; c.height = h; return c;
+  }
+  function busy(on, msg){
+    wrap.classList.toggle("busy", !!on);
+    if (msg) busyMsg.firstElementChild.textContent = msg;
+  }
+  function setNote(cls, text){ note.className = "note" + (cls ? " " + cls : ""); note.textContent = text; }
+
+  /* ================= background removal ================= */
+  var segmenter = null, pending = null, segFailed = false;
+
+  function initSeg(){
+    if (segmenter) return true;
+    if (typeof SelfieSegmentation === "undefined") return false;
+    segmenter = new SelfieSegmentation({ locateFile: function(f){
+      return "https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation@0.1.1675465747/" + f;
+    }});
+    segmenter.setOptions({ modelSelection: 1 });
+    segmenter.onResults(function(res){
+      if (!pending) return;
+      var done = pending; pending = null;
+      done(res.segmentationMask);
+    });
+    return true;
+  }
+
+  function segment(canvas){
+    return new Promise(function(resolve, reject){
+      if (!initSeg()){ reject(new Error("model unavailable")); return; }
+      var to = setTimeout(function(){ pending = null; reject(new Error("timed out")); }, 20000);
+      pending = function(mask){
+        clearTimeout(to);
+        var c = newCanvas(canvas.width, canvas.height);
+        c.getContext("2d").drawImage(mask, 0, 0, c.width, c.height);
+        resolve(c);
+      };
+      segmenter.send({ image: canvas }).catch(function(e){
+        clearTimeout(to); pending = null; reject(e);
+      });
+    });
+  }
+
+  /* ================= face detection ================= */
+  var detector = null, facePending = null, faceFailed = false;
+  var face = null;   // {cx, cy, w, h, eyeL, eyeR} in source-image pixels
+
+  function initFace(){
+    if (detector) return true;
+    if (typeof FaceDetection === "undefined") return false;
+    detector = new FaceDetection({ locateFile: function(f){
+      return "https://cdn.jsdelivr.net/npm/@mediapipe/face_detection@0.4.1646425229/" + f;
+    }});
+    detector.setOptions({ model: "short", minDetectionConfidence: 0.5 });
+    detector.onResults(function(res){
+      if (!facePending) return;
+      var done = facePending; facePending = null;
+      done(res.detections || []);
+    });
+    return true;
+  }
+
+  function detect(canvas){
+    return new Promise(function(resolve, reject){
+      if (!initFace()){ reject(new Error("detector unavailable")); return; }
+      var to = setTimeout(function(){ facePending = null; reject(new Error("timed out")); }, 20000);
+      facePending = function(dets){ clearTimeout(to); resolve(dets); };
+      detector.send({ image: canvas }).catch(function(e){
+        clearTimeout(to); facePending = null; reject(e);
+      });
+    });
+  }
+
+  function readFace(dets, w, h){
+    if (!dets.length) return null;
+    var d = dets[0], bb = d.boundingBox;
+    var lm = d.landmarks || [];
+    return {
+      count: dets.length,
+      cx: bb.xCenter * w, cy: bb.yCenter * h,
+      w:  bb.width  * w,  h:  bb.height * h,
+      eyeR: lm[0] ? { x: lm[0].x * w, y: lm[0].y * h } : null,
+      eyeL: lm[1] ? { x: lm[1].x * w, y: lm[1].y * h } : null
+    };
+  }
+
+  /* ================= alignment check ================= */
+  var checkEl = document.getElementById("check");
+  var aligned = false, overrideOnce = false;
+
+  function toCrop(px, py){ return { x: (px * scale() + ox) / D, y: (py * scale() + oy) / D }; }
+
+  function checkAlignment(){
+    if (!srcCanvas){ checkEl.hidden = true; return; }
+    if (faceFailed){ checkEl.hidden = true; aligned = true; return; }
+    checkEl.hidden = false;
+
+    var bad = [];
+    if (!face){
+      checkEl.className = "check warn";
+      checkEl.innerHTML = "<b>No face found</b><ul><li>Face the camera straight on, with your whole head in the picture.</li>"
+        + "<li>Make sure the light is on your face, not behind you.</li></ul>";
+      aligned = false;
+      return;
+    }
+    if (face.count > 1) bad.push("More than one face is in the picture. Only you should be in the frame.");
+
+    var c = toCrop(face.cx, face.cy);
+    var faceH = face.h * scale() / D;
+    var faceW = face.w * scale() / D;
+
+    var eyeY = c.y, tilt = 0;
+    if (face.eyeL && face.eyeR){
+      var a = toCrop(face.eyeR.x, face.eyeR.y), b = toCrop(face.eyeL.x, face.eyeL.y);
+      eyeY = (a.y + b.y) / 2;
+      tilt = Math.abs(Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI);
+      if (tilt > 90) tilt = 180 - tilt;
+    }
+
+    if (eyeY < 0.29)      bad.push("Your eyes sit too high. Drag the picture down a little.");
+    else if (eyeY > 0.47) bad.push("Your eyes sit too low. Drag the picture up a little.");
+
+    if (c.x < 0.40)      bad.push("Your head is too far left. Drag the picture right.");
+    else if (c.x > 0.60) bad.push("Your head is too far right. Drag the picture left.");
+
+    if (faceH < 0.26)      bad.push("Your head is too small in the square. Move closer, or zoom in.");
+    else if (faceH > 0.52) bad.push("Your head fills too much of the square. Move back, or zoom out.");
+
+    if (tilt > 8) bad.push("Your head is tilted. Keep it level and look straight ahead.");
+
+    var left = c.x - faceW / 2, right = c.x + faceW / 2, top = c.y - faceH / 2;
+    if (left < 0.05 || right > 0.95 || top < 0.03)
+      bad.push("Part of your head is outside the square. Drag it fully inside.");
+
+    aligned = bad.length === 0;
+    if (aligned){
+      checkEl.className = "check ok";
+      checkEl.innerHTML = "<b>Alignment looks good</b>Your head is centred and the right size for a 2×2 picture.";
+    } else {
+      overrideOnce = false;
+      checkEl.className = "check warn";
+      checkEl.innerHTML = "<b>Fix these before sending</b><ul>"
+        + bad.map(function(t){ return "<li>" + t + "</li>"; }).join("") + "</ul>";
+    }
+  }
+
+  /* person kept, everything else filled with BG_COLOUR */
+  function onBackground(src, mask){
+    var c = newCanvas(src.width, src.height);
+    var g = c.getContext("2d");
+    g.filter = "blur(1.6px)";              // feather the cut-out edge
+    g.drawImage(mask, 0, 0);
+    g.filter = "none";
+    g.globalCompositeOperation = "source-in";
+    g.drawImage(src, 0, 0);
+    g.globalCompositeOperation = "destination-over";
+    g.fillStyle = BG_COLOUR;
+    g.fillRect(0, 0, c.width, c.height);
+    g.globalCompositeOperation = "source-over";
+    return c;
+  }
+
+  /* ================= enhancement ================= */
+  function enhance(src, mask){
+    var w = src.width, h = src.height;
+    var c = newCanvas(w, h), g = c.getContext("2d");
+    g.drawImage(src, 0, 0);
+    var id = g.getImageData(0, 0, w, h), d = id.data;
+
+    var ma = mask ? mask.getContext("2d").getImageData(0, 0, w, h).data : null;
+
+    // stats over the person only, so a bright background can't skew them
+    var hist = new Float64Array(256), n = 0, sr = 0, sg = 0, sb = 0, nHi = 0, hr = 0, hg = 0, hb = 0;
+    for (var i = 0; i < d.length; i += 16){          // sample every 4th pixel
+      if (ma && ma[i + 3] < 128) continue;
+      var r = d[i], gg = d[i + 1], b = d[i + 2];
+      var l = 0.299 * r + 0.587 * gg + 0.114 * b;
+      hist[l | 0]++; n++;
+      sr += r; sg += gg; sb += b;
+      if (l > 170){ hr += r; hg += gg; hb += b; nHi++; }
+    }
+    if (n < 400){                                     // mask too small to trust
+      hist = new Float64Array(256); n = 0; sr = sg = sb = 0; nHi = 0; hr = hg = hb = 0;
+      for (var j = 0; j < d.length; j += 16){
+        var r2 = d[j], g2 = d[j + 1], b2 = d[j + 2];
+        var l2 = 0.299 * r2 + 0.587 * g2 + 0.114 * b2;
+        hist[l2 | 0]++; n++; sr += r2; sg += g2; sb += b2;
+        if (l2 > 170){ hr += r2; hg += g2; hb += b2; nHi++; }
+      }
+    }
+
+    // 1% / 99% points for a gentle levels stretch
+    var lo = 0, hi = 255, acc = 0, cut = n * 0.01, k;
+    for (k = 0; k < 256; k++){ acc += hist[k]; if (acc >= cut){ lo = k; break; } }
+    acc = 0;
+    for (k = 255; k >= 0; k--){ acc += hist[k]; if (acc >= cut){ hi = k; break; } }
+    if (hi - lo < 40){ lo = 0; hi = 255; }
+    lo = lo * 0.7; hi = 255 - (255 - hi) * 0.7;        // hold back, don't clip faces
+
+    // white balance from the highlights, tightly limited
+    var kr = 1, kg = 1, kb = 1;
+    if (nHi > 50){
+      hr /= nHi; hg /= nHi; hb /= nHi;
+      var avg = (hr + hg + hb) / 3;
+      kr = Math.min(1.07, Math.max(0.93, avg / (hr || 1)));
+      kg = Math.min(1.07, Math.max(0.93, avg / (hg || 1)));
+      kb = Math.min(1.07, Math.max(0.93, avg / (hb || 1)));
+    }
+
+    // one lookup table per channel: white balance -> levels -> soft contrast
+    var lut = [new Uint8ClampedArray(256), new Uint8ClampedArray(256), new Uint8ClampedArray(256)];
+    var gains = [kr, kg, kb], span = (hi - lo) || 255;
+    for (var ch = 0; ch < 3; ch++){
+      for (var v = 0; v < 256; v++){
+        var x = v * gains[ch];
+        x = (x - lo) * 255 / span;
+        var t = Math.min(1, Math.max(0, x / 255));
+        t = t + 0.10 * t * (1 - t) * (2 * t - 1) + 0.02 * (1 - t) * t * 4;   // mild S-curve + shadow lift
+        lut[ch][v] = t * 255;
+      }
+    }
+
+    var SAT = 1.07;
+    for (var p = 0; p < d.length; p += 4){
+      var R = lut[0][d[p]], G = lut[1][d[p + 1]], B = lut[2][d[p + 2]];
+      var L = 0.299 * R + 0.587 * G + 0.114 * B;
+      d[p]     = L + (R - L) * SAT;
+      d[p + 1] = L + (G - L) * SAT;
+      d[p + 2] = L + (B - L) * SAT;
+    }
+    g.putImageData(id, 0, 0);
+
+    // unsharp mask for a little bite
+    var bl = newCanvas(w, h), bg2 = bl.getContext("2d");
+    bg2.filter = "blur(1.1px)";
+    bg2.drawImage(c, 0, 0);
+    var blur = bg2.getImageData(0, 0, w, h).data;
+    var cur = g.getImageData(0, 0, w, h), cd = cur.data, AMT = 0.55;
+    for (var q = 0; q < cd.length; q += 4){
+      cd[q]     = cd[q]     + AMT * (cd[q]     - blur[q]);
+      cd[q + 1] = cd[q + 1] + AMT * (cd[q + 1] - blur[q + 1]);
+      cd[q + 2] = cd[q + 2] + AMT * (cd[q + 2] - blur[q + 2]);
+    }
+    g.putImageData(cur, 0, 0);
+    return c;
+  }
+
+  /* ================= variant cache ================= */
+  function current(){
+    var key = (bgOn.checked && maskCanvas ? "bg" : "raw") + (enhOn.checked ? "-enh" : "");
+    if (cache[key]) return cache[key];
+    var out = srcCanvas;
+    if (enhOn.checked) out = enhance(out, maskCanvas);
+    if (bgOn.checked && maskCanvas) out = onBackground(out, maskCanvas);
+    cache[key] = out;
+    return out;
+  }
+
+  /* ================= cropper ================= */
+  function sizeCanvas(){
+    D = wrap.clientWidth;
+    var dpr = window.devicePixelRatio || 1;
+    cv.width = Math.round(D * dpr); cv.height = Math.round(D * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  function scale(){ return base * zoom; }
+  function drawW(){ return srcCanvas.width  * scale(); }
+  function drawH(){ return srcCanvas.height * scale(); }
+  function clamp(){
+    ox = Math.min(0, Math.max(D - drawW(), ox));
+    oy = Math.min(0, Math.max(D - drawH(), oy));
+  }
+  function render(){
+    ctx.clearRect(0, 0, D, D);
+    if (!srcCanvas) return;
+    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, D, D);
+    ctx.drawImage(current(), ox, oy, drawW(), drawH());
+  }
+  function reportQuality(extra){
+    var srcPx = Math.round(D / scale());
+    if (srcPx < 400) setNote("err", "This photo is too small to print sharply (" + srcPx + "px across the crop). Use a larger one.");
+    else if (srcPx < OUT) setNote("flag", "Usable, but a little soft for print (" + srcPx + "px across, " + OUT + "px is ideal).");
+    else setNote("", (extra || "") + "Saved as " + OUT + "×" + OUT + " pixels — a true 2×2 inches at 300 dpi.");
+  }
+
+  /* accepts an <img>, a <canvas>, or a video frame */
+  function adopt(source, sw, sh){
+    var s = Math.min(1, MAXW / Math.max(sw, sh));
+    srcCanvas = newCanvas(Math.round(sw * s), Math.round(sh * s));
+    srcCanvas.getContext("2d").drawImage(source, 0, 0, srcCanvas.width, srcCanvas.height);
+
+    maskCanvas = null; cache = {};
+    sizeCanvas();
+    base = D / Math.min(srcCanvas.width, srcCanvas.height);
+    zoom = 1; zoomEl.value = 1; zoomEl.classList.remove("zoom-off");
+    ox = (D - drawW()) / 2; oy = (D - drawH()) / 2;
+    clamp();
+    wrap.classList.remove("empty");
+    emptyMsg.hidden = true;
+    camBtn.textContent = "Retake";
+    render();
+
+    face = null;
+    checkEl.hidden = true;
+    if (!faceFailed){
+      detect(srcCanvas).then(function(dets){
+        face = readFace(dets, srcCanvas.width, srcCanvas.height);
+        frameBtn.hidden = !face;
+        if (face) autoFrame();
+        checkAlignment();
+      }).catch(function(){
+        faceFailed = true;
+        checkEl.hidden = true;
+        aligned = true;   // cannot check, so do not block anyone
+      });
+    }
+
+    if (segFailed){ reportQuality(""); return; }
+    busy(true, "Removing the background…");
+    setNote("", "Working on it…");
+    segment(srcCanvas).then(function(m){
+      maskCanvas = m; cache = {};
+      busy(false); render(); reportQuality("");
+    }).catch(function(){
+      segFailed = true;
+      bgOn.checked = false; bgOn.disabled = true;
+      document.getElementById("bgToggle").classList.add("off");
+      cache = {}; busy(false); render();
+      setNote("flag", "The background remover could not load, so your original background is kept. Everything else still works — check your connection and reload to try again.");
+    });
+  }
+
+  /* puts the head where an ID picture wants it, then the member can adjust */
+  var frameBtn = document.getElementById("frameBtn");
+  function autoFrame(){
+    if (!face || !srcCanvas) return;
+    var want = 0.36 * D / face.h;                 // face box ~36% of the square
+    zoom = Math.min(3, Math.max(1, want / base));
+    zoomEl.value = zoom;
+    var eyeY = (face.eyeL && face.eyeR) ? (face.eyeL.y + face.eyeR.y) / 2 : face.cy;
+    ox = D * 0.5 - face.cx * scale();
+    oy = D * 0.38 - eyeY * scale();
+    clamp(); render(); reportQuality("");
+  }
+  frameBtn.addEventListener("click", function(){ autoFrame(); checkAlignment(); });
+
+  /* ================= file upload ================= */
+  var fileEl = document.getElementById("file");
+
+  function load(file){
+    if (!file || !/^image\//.test(file.type)){
+      setNote("err", "That file is not an image. Choose a JPG or PNG.");
+      return;
+    }
+    var url = URL.createObjectURL(file);
+    var im = new Image();
+    im.onload = function(){ URL.revokeObjectURL(url); adopt(im, im.width, im.height); };
+    im.onerror = function(){
+      URL.revokeObjectURL(url);
+      setNote("err", "That image could not be opened. Try a different file.");
+    };
+    im.src = url;
+  }
+
+  document.getElementById("pickBtn").addEventListener("click", function(){ stopCam(); fileEl.click(); });
+  fileEl.addEventListener("change", function(){ if (fileEl.files[0]) load(fileEl.files[0]); });
+
+  ["dragenter","dragover"].forEach(function(t){
+    wrap.addEventListener(t, function(e){ e.preventDefault(); wrap.classList.add("drag"); });
+  });
+  ["dragleave","drop"].forEach(function(t){
+    wrap.addEventListener(t, function(e){ e.preventDefault(); wrap.classList.remove("drag"); });
+  });
+  wrap.addEventListener("drop", function(e){ if (e.dataTransfer.files[0]) load(e.dataTransfer.files[0]); });
+
+  /* ================= live camera ================= */
+  var video   = document.getElementById("cam");
+  var mainBar = document.getElementById("stageControls");
+  var camBar  = document.getElementById("camControls");
+  var camBtn  = document.getElementById("camBtn");
+  var stream  = null, facing = "user";
+
+  var hasCam = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+  if (!hasCam){
+    camBtn.disabled = true;
+    camBtn.textContent = "Camera unavailable";
+    setNote("err", "This browser will not open the camera. Open the page over https on a phone, using Chrome or Safari.");
+  }
+
+  function stopCam(){
+    if (stream){ stream.getTracks().forEach(function(t){ t.stop(); }); stream = null; }
+    video.srcObject = null;
+    wrap.classList.remove("live");
+    camBar.hidden = true; mainBar.hidden = false;
+  }
+
+  function startCam(){
+    if (stream) { stopCam(); }
+    navigator.mediaDevices.getUserMedia({
+      video: { facingMode: facing, width: { ideal: 1440 }, height: { ideal: 1440 } },
+      audio: false
+    }).then(function(s){
+      stream = s;
+      video.srcObject = s;
+      video.play();
+      video.style.transform = (facing === "user") ? "scaleX(-1)" : "none";
+      wrap.classList.add("live");
+      wrap.classList.remove("empty");
+      emptyMsg.hidden = true;
+      camBar.hidden = false; mainBar.hidden = true;
+      setNote("", "Line your head up with the guides, then take the shot.");
+    }).catch(function(e){
+      stopCam();
+      if (e && (e.name === "NotAllowedError" || e.name === "SecurityError")){
+        setNote("err", "Camera access was blocked. Allow the camera for this site in your browser settings, then tap Open the camera again.");
+      } else if (e && e.name === "NotFoundError"){
+        setNote("err", "No camera found on this device. Open this page on a phone with a camera.");
+      } else {
+        setNote("err", "The camera could not start. Close other apps using it, then try again.");
+      }
+    });
+  }
+
+  var timerBtn = document.getElementById("timerBtn");
+  var cdEl = document.getElementById("countdown");
+  var useTimer = false, counting = false;
+
+  timerBtn.addEventListener("click", function(){
+    useTimer = !useTimer;
+    timerBtn.setAttribute("aria-pressed", useTimer ? "true" : "false");
+  });
+
+  function shootWithTimer(){
+    if (counting) return;
+    if (!useTimer){ shoot(); return; }
+    counting = true;
+    var n = 3;
+    cdEl.hidden = false; cdEl.textContent = n;
+    var iv = setInterval(function(){
+      n--;
+      if (n > 0){ cdEl.textContent = n; return; }
+      clearInterval(iv);
+      cdEl.hidden = true; counting = false;
+      shoot();
+    }, 1000);
+  }
+
+  function shoot(){
+    var flash = document.getElementById("flash");
+    flash.classList.add("on");
+    setTimeout(function(){ flash.classList.remove("on"); }, 60);
+    var w = video.videoWidth, h = video.videoHeight;
+    if (!w || !h){ setNote("err", "The camera is not ready yet. Wait a second and try again."); return; }
+    var frame = newCanvas(w, h);
+    frame.getContext("2d").drawImage(video, 0, 0);   // saved the right way round, not mirrored
+    stopCam();
+    adopt(frame, w, h);
+  }
+
+  camBtn.addEventListener("click", startCam);
+  document.getElementById("shootBtn").addEventListener("click", shootWithTimer);
+  document.getElementById("cancelCamBtn").addEventListener("click", function(){
+    stopCam();
+    if (!srcCanvas){ wrap.classList.add("empty"); emptyMsg.hidden = false; setNote("", "Nothing selected yet."); }
+    else { render(); reportQuality(""); }
+  });
+  document.getElementById("flipBtn").addEventListener("click", function(){
+    facing = (facing === "user") ? "environment" : "user";
+    startCam();
+  });
+  window.addEventListener("pagehide", stopCam);
+  window.addEventListener("beforeunload", function(e){
+    if (srcCanvas && !sent){ e.preventDefault(); e.returnValue = ""; }
+  });
+
+  [bgOn, enhOn].forEach(function(el){
+    el.addEventListener("change", function(){ render(); if (srcCanvas) reportQuality(""); });
+  });
+
+  zoomEl.addEventListener("input", function(){
+    if (!srcCanvas) return;
+    var old = scale();
+    var cx = (D / 2 - ox) / old, cy = (D / 2 - oy) / old;
+    zoom = parseFloat(zoomEl.value);
+    ox = D / 2 - cx * scale(); oy = D / 2 - cy * scale();
+    clamp(); render(); reportQuality(""); checkAlignment();
+  });
+
+  var dragging = false, lx = 0, ly = 0;
+  cv.addEventListener("pointerdown", function(e){
+    if (!srcCanvas) return;
+    dragging = true; lx = e.clientX; ly = e.clientY;
+    cv.setPointerCapture(e.pointerId);
+  });
+  cv.addEventListener("pointermove", function(e){
+    if (!dragging) return;
+    ox += e.clientX - lx; oy += e.clientY - ly;
+    lx = e.clientX; ly = e.clientY;
+    clamp(); render(); checkAlignment();
+  });
+  ["pointerup","pointercancel"].forEach(function(t){
+    cv.addEventListener(t, function(){ dragging = false; });
+  });
+
+  wrap.addEventListener("click", function(){ if (!srcCanvas && !stream) startCam(); });
+  wrap.addEventListener("keydown", function(e){
+    if (!srcCanvas && !stream && (e.key === "Enter" || e.key === " ")){ e.preventDefault(); startCam(); }
+  });
+
+  window.addEventListener("resize", function(){
+    if (!srcCanvas) return;
+    var prev = D, s = scale(), cx = (prev / 2 - ox) / s, cy = (prev / 2 - oy) / s;
+    sizeCanvas();
+    base = D / Math.min(srcCanvas.width, srcCanvas.height);
+    ox = D / 2 - cx * scale(); oy = D / 2 - cy * scale();
+    clamp(); render();
+  });
+  sizeCanvas();
+
+  function exportPhoto(){
+    var c = newCanvas(OUT, OUT), g = c.getContext("2d");
+    g.fillStyle = BG_COLOUR; g.fillRect(0, 0, OUT, OUT);
+    g.imageSmoothingQuality = "high";
+    var f = OUT / D;
+    g.drawImage(current(), ox * f, oy * f, drawW() * f, drawH() * f);
+    return c.toDataURL("image/jpeg", 0.92);
+  }
+
+  function exportThumb(){
+    var T = 120, c = newCanvas(T, T), g = c.getContext("2d");
+    g.fillStyle = BG_COLOUR; g.fillRect(0, 0, T, T);
+    g.imageSmoothingQuality = "high";
+    var f = T / D;
+    g.drawImage(current(), ox * f, oy * f, drawW() * f, drawH() * f);
+    return c.toDataURL("image/jpeg", 0.8);
+  }
+
+  /* ================= consent ================= */
+  var consent   = document.getElementById("consent");
+  var publish   = document.getElementById("consentPublish");
+  var guardWrap = document.getElementById("guardianWrap");
+  var guardName = document.getElementById("guardianName");
+  var guardRel  = document.getElementById("guardianRel");
+  var guardOk   = document.getElementById("guardianOk");
+  var birthEl   = document.getElementById("f_birthdate");
+
+  var COLLECTED = FIELDS.map(function(f){ return f.label.toLowerCase(); }).join(", ")
+    + ", your 2\u00d72 picture, and the date you sent it";
+
+  document.getElementById("consentSummary").textContent =
+    ORG + " is collecting " + COLLECTED + " to build the KOA member records, to identify members, "
+    + "and to print member IDs. Your date of birth is sensitive personal information under the "
+    + "Data Privacy Act, so it is only collected with your consent. The pictures are kept privately "
+    + "and seen by " + WHO_SEES + ", " + RETENTION + ".";
+
+  document.getElementById("consentText").textContent =
+    "I have read the notice and I agree to " + ORG + " collecting and using my picture and details "
+    + "for KOA records, identification, and IDs. (Required)";
+
+  var notice = [
+    ["Who is collecting this",
+      [ORG + " is the group responsible for this information, together with the parish office.",
+       "Questions, corrections, and requests to delete go to " + DPO_NAME + ": " + DPO_CONTACT + "."]],
+    ["What is collected",
+      [COLLECTED + ".",
+       "If you are under 18, also your parent or guardian's name and relationship to you."]],
+    ["Why it is collected",
+      ["To keep the KOA member list and profiles.",
+       "To identify members and print member IDs.",
+       "Nothing else. It is not sold, and it is not used for anything outside the ministry."]],
+    ["How it is handled",
+      ["Your picture is taken or chosen on your own phone. The background removal and clean-up run on your phone, not on a server.",
+       "Only the finished 2\u00d72 picture and the details you typed are sent.",
+       "Pictures are stored in a private Google Drive folder. They are not public, and there is no shareable link.",
+       "Your details go into a Google Sheet that only " + WHO_SEES + " can open."]],
+    ["Who can see it",
+      [WHO_SEES + ", and nobody else.",
+       "It is not posted publicly unless you tick the optional box for announcements and posts. That box is separate, and leaving it unticked changes nothing else."]],
+    ["How long it is kept",
+      ["Kept " + RETENTION + ", then deleted.",
+       "If you ask for it to be deleted sooner, it is deleted, unless a church or legal record requires otherwise."]],
+    ["Your rights under the Data Privacy Act",
+      ["To be informed about how your data is used.",
+       "To see a copy of what is held about you.",
+       "To correct anything wrong.",
+       "To object to the processing, or to ask that it be blocked or erased.",
+       "To get a copy of your data in a usable form.",
+       "To be paid damages for misuse.",
+       "To complain to the National Privacy Commission at privacy.gov.ph if you are not satisfied.",
+       "To use any of these, contact " + DPO_NAME + ": " + DPO_CONTACT + "."]],
+    ["Taking back your consent",
+      ["You can withdraw at any time, free, by telling " + DPO_NAME + ". No reason needed.",
+       "Your picture and details are then deleted and stop being used.",
+       "Withdrawing does not make what was already done unlawful."]],
+    ["If you are under 18",
+      ["Your parent or guardian gives the consent for you, and can withdraw it the same way."]]
+  ];
+
+  var nb = document.getElementById("noticeBody");
+  notice.forEach(function(sec){
+    var h = document.createElement("h4"); h.textContent = sec[0]; nb.appendChild(h);
+    var ul = document.createElement("ul");
+    sec[1].forEach(function(t){ var li = document.createElement("li"); li.textContent = t; ul.appendChild(li); });
+    nb.appendChild(ul);
+  });
+  var ver = document.createElement("p");
+  ver.style.marginTop = "12px";
+  ver.textContent = "Notice version " + CONSENT_VERSION + ".";
+  nb.appendChild(ver);
+
+  function ageOn(dateStr){
+    if (!dateStr) return null;
+    var b = new Date(dateStr);
+    if (isNaN(b)) return null;
+    var now = new Date(), a = now.getFullYear() - b.getFullYear();
+    var m = now.getMonth() - b.getMonth();
+    if (m < 0 || (m === 0 && now.getDate() < b.getDate())) a--;
+    return a;
+  }
+  function refreshGuardian(){
+    var a = birthEl ? ageOn(birthEl.value) : null;
+    var minor = (a !== null && a < 18);
+    guardWrap.hidden = !minor;
+    if (!minor){ guardOk.checked = false; guardName.value = ""; guardRel.value = ""; }
+  }
+  if (birthEl) birthEl.addEventListener("change", refreshGuardian);
+
+  /* ================= submit ================= */
+  var form = document.getElementById("form");
+  var btn  = document.getElementById("submitBtn");
+  var err  = document.getElementById("formErr");
+  var sent = false;
+
+  form.addEventListener("submit", function(e){
+    e.preventDefault();
+    err.hidden = true;
+
+    if (!srcCanvas){
+      err.hidden = false; err.textContent = "Add your photo first.";
+      wrap.scrollIntoView({ block: "center", behavior: "smooth" });
+      return;
+    }
+    if (!form.checkValidity()){ form.reportValidity(); return; }
+    if (!aligned && !overrideOnce){
+      overrideOnce = true;
+      err.hidden = false;
+      err.textContent = "The alignment check found problems above. Fix them, or press send again to submit this picture anyway.";
+      document.getElementById("check").scrollIntoView({ block: "center", behavior: "smooth" });
+      return;
+    }
+    if (ENDPOINT.indexOf("http") !== 0){
+      err.hidden = false;
+      err.textContent = "This form has no destination yet. Add your Apps Script URL to ENDPOINT in index.html.";
+      return;
+    }
+
+    if (!consent.checked){
+      err.hidden = false;
+      err.textContent = "Please tick the box allowing your picture and details to be used.";
+      consent.scrollIntoView({ block: "center", behavior: "smooth" });
+      return;
+    }
+    if (!guardWrap.hidden && (!guardOk.checked || !guardName.value.trim() || !guardRel.value.trim())){
+      err.hidden = false;
+      err.textContent = "You are under 18, so your parent or guardian's name, relationship, and agreement are needed.";
+      guardWrap.scrollIntoView({ block: "center", behavior: "smooth" });
+      return;
+    }
+
+    var values = {}, nameSource = "";
+    FIELDS.forEach(function(f){
+      var v = (document.getElementById("f_" + f.name).value || "").trim();
+      if (f.upper) v = v.toUpperCase();
+      values[f.label] = v;
+      if (f.name === PHOTO_NAME_FIELD) nameSource = v;
+    });
+
+    values["Consent"] = "Yes";
+    values["Consent version"] = CONSENT_VERSION;
+    values["Consent given at"] = new Date().toString();
+    values["Publicity consent"] = publish.checked ? "Yes" : "No";
+    values["Parent or guardian"] = guardWrap.hidden ? "" : guardName.value.trim();
+    values["Guardian relationship"] = guardWrap.hidden ? "" : guardRel.value.trim();
+
+    var who = nameSource.toUpperCase().replace(/[^A-Z0-9]+/g, "-").replace(/^-|-$/g, "") || "PHOTO";
+    var photoData = exportPhoto();
+
+    btn.disabled = true; btn.textContent = "Sending…";
+    fetch(ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({
+        fields: values,
+        filename: who + ".jpg",
+        photo: photoData,
+        thumb: exportThumb()
+      })
+    }).then(function(r){ return r.json(); }).then(function(out){
+      if (!out.ok) throw new Error(out.error || "The server rejected the submission.");
+      sent = true;
+      stopCam();
+      var dl = document.getElementById("dlLink");
+      dl.href = photoData; dl.download = who + ".jpg";
+      document.getElementById("photoCard").hidden = true;
+      form.hidden = true;
+      var done = document.getElementById("done");
+      done.style.display = "block";
+      done.scrollIntoView({ block: "center", behavior: "smooth" });
+    }).catch(function(ex){
+      err.hidden = false;
+      err.textContent = "Could not send: " + ex.message + " Check your connection and try again.";
+      btn.disabled = false; btn.textContent = "Send my photo and details";
+    });
+  });
+})();
+</script>
+</body>
+</html>

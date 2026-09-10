@@ -18,7 +18,7 @@
      3. BG_COLOUR  – the replacement background colour
      =================================================================== -->
 <script>
-const ENDPOINT  = "https://script.google.com/macros/s/AKfycbzcCJ5WePCRhTtZBDax4Cmbdo3n8LpCqcwGch4ZHiEBgW0vVKrGHvSpJOEZvqVRoSCRDA/exec";
+const ENDPOINT  = "PASTE_YOUR_APPS_SCRIPT_WEB_APP_URL_HERE";
 const BG_COLOUR = "#ffffff";
 
 // the photo file is named after this field, e.g. SENILLO.jpg
@@ -31,7 +31,7 @@ const PHOTO_NAME_FIELD = "lastName";
    rights, at the moment consent is asked for. */
 const ORG        = "Knights of the Altar Server, San Miguel Parish Panacan";
 const DPO_NAME   = "the Parish Data Protection Officer";
-const DPO_CONTACT= "0947 175 3773";
+const DPO_CONTACT= "PUT A REAL EMAIL OR MOBILE NUMBER HERE";
 const RETENTION  = "for as long as you are an active member, and one year after you leave";
 const WHO_SEES   = "the KOA officers and the parish office";
 const CONSENT_VERSION = "2026-09-07";
@@ -53,8 +53,8 @@ const FIELDS = [
 ];
 </script>
 
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation@0.1.1675465747/selfie_segmentation.js" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_detection@0.4.1646425229/face_detection.js" crossorigin="anonymous"></script>
+<script src="vendor/selfie_segmentation/selfie_segmentation.js"></script>
+<script src="vendor/face_detection/face_detection.js"></script>
 
 <style>
   :root{
@@ -256,7 +256,7 @@ const FIELDS = [
       </div>
     </div>
 
-    <p class="note" id="dataNote">First time on this page, it downloads about 5 MB for the background and face tools. Use Wi-Fi if you can.</p>
+    <p class="note" id="dataNote">First time on this page, it loads about 20 MB of picture tools. Use Wi-Fi if you can. After that it is cached.</p>
 
     <div class="stage-wrap empty" id="stageWrap" tabindex="0" role="button" aria-label="Choose a photo">
       <canvas id="stage"></canvas>
@@ -441,7 +441,7 @@ const FIELDS = [
     if (segmenter) return true;
     if (typeof SelfieSegmentation === "undefined") return false;
     segmenter = new SelfieSegmentation({ locateFile: function(f){
-      return "https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation@0.1.1675465747/" + f;
+      return "vendor/selfie_segmentation/" + f;
     }});
     segmenter.setOptions({ modelSelection: 1 });
     segmenter.onResults(function(res){
@@ -476,7 +476,7 @@ const FIELDS = [
     if (detector) return true;
     if (typeof FaceDetection === "undefined") return false;
     detector = new FaceDetection({ locateFile: function(f){
-      return "https://cdn.jsdelivr.net/npm/@mediapipe/face_detection@0.4.1646425229/" + f;
+      return "vendor/face_detection/" + f;
     }});
     detector.setOptions({ model: "short", minDetectionConfidence: 0.5 });
     detector.onResults(function(res){
@@ -753,7 +753,7 @@ const FIELDS = [
       bgOn.checked = false; bgOn.disabled = true;
       document.getElementById("bgToggle").classList.add("off");
       cache = {}; busy(false); render();
-      setNote("flag", "The background remover could not load, so your original background is kept. Everything else still works — check your connection and reload to try again.");
+      setNote("flag", "The background remover could not start on this device, so your original background is kept. Everything else still works. Try reloading once.");
     });
   }
 
